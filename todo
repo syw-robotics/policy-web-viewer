@@ -1,0 +1,21 @@
+确定我改了web-policy的js或者html，export出来的wasm的页面也会跟着变化吗
+
+
+• 不一定。
+
+  现在有两套前端源码：
+
+  - 本地 web-policy 用：src/web_policy/static/index.html、src/web_policy/static/app.js、src/web_policy/static/
+    styles.css
+
+  - 导出 wasm 用：web_runtime/index.html、web_runtime/src/main.js、web_runtime/src/styles.css
+
+  所以你只改 src/web_policy/static/app.js/html/css，web-policy-export 导出的页面不会自动跟着变。它只会跟着
+  web_runtime/* 变。
+
+  目前我们只是把两边手动同步了一批 UI 和参数，还没有做到“同一份前端源码”。如果你的目标是用户只维护 web-policy 的页
+  面，正确做法应该是下一步把公共 UI 抽出来共用，至少让 HTML/CSS/控件逻辑来自同一份文件；否则以后还会出现本地改了、
+  导出没变的问题。
+
+
+- 是否有必要存在两套前端？

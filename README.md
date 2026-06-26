@@ -19,6 +19,32 @@ web-policy --robot g1 --ckpt /home/syw/.gitrepos/unitree-deploy/ckpt/g1/vanilla_
 
 Open `http://127.0.0.1:8000`.
 
+## Static GitHub Pages export
+
+After tuning a local demo, export a static browser simulation folder:
+
+```bash
+npm install
+
+web-policy-export \
+  --robot g1 \
+  --ckpt /home/syw/.gitrepos/unitree-deploy/ckpt/g1/vanilla_ppo_flat \
+  --out export/g1-demo \
+  --overwrite
+```
+
+The export builds a self-contained static site that runs MuJoCo WASM and ONNX
+Runtime Web in the browser. Command sliders and left-drag external forces affect
+the live simulation. Push the output folder contents to a GitHub repository and
+enable GitHub Pages for that branch or folder.
+
+For local inspection:
+
+```bash
+cd export/g1-demo
+python3 -m http.server 8080
+```
+
 ## UI command schema
 
 Each checkpoint can provide a `web_policy.yaml` or `web_demo.yaml` next to `policy.yaml` to describe the command controls shown in the browser. The current runtime keeps `web_demo.yaml` compatibility for migrated checkpoints; new templates should use `web_policy.yaml`.

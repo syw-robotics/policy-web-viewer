@@ -1,0 +1,6 @@
+node_modules/
+export/
+dist/
+__pycache__/
+*.pyc
+*.egg-info/

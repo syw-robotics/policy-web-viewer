@@ -87,24 +87,6 @@ select {
   pointer-events: none;
 }
 
-.view-params {
-  position: absolute;
-  left: 18px;
-  top: 16px;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(10, 13, 16, 0.62);
-  color: var(--text);
-  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  line-height: 1.45;
-  backdrop-filter: blur(8px);
-  pointer-events: none;
-  white-space: pre;
-}
-
 .panel {
   display: flex;
   min-width: 0;
@@ -193,13 +175,6 @@ button:disabled {
   border-bottom: 0;
 }
 
-.readout span,
-.sticks span,
-footer {
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .readout strong {
   min-width: 0;
   overflow: hidden;
@@ -209,6 +184,13 @@ footer {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.readout span,
+.sticks span,
+footer {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .sticks {
@@ -265,14 +247,6 @@ footer {
   margin-top: auto;
   padding-top: 16px;
   border-top: 1px solid var(--line);
-}
-
-#connection[data-state="ok"] {
-  color: var(--accent);
-}
-
-#connection[data-state="error"] {
-  color: var(--danger);
 }
 
 @media (max-width: 840px) {

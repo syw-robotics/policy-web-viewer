@@ -1,0 +1,16 @@
+{
+  "name": "web-policy-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "vite build web_runtime"
+  },
+  "dependencies": {
+    "mujoco-js": "^0.0.7",
+    "onnxruntime-web": "^1.21.1",
+    "three": "0.151.3"
+  },
+  "devDependencies": {
+    "vite": "^6.2.2"
+  }
+}

@@ -35,6 +35,7 @@ const state = {
   keys: new Set(),
   follow: true,
   showContacts: false,
+  dragEnabled: true,
   renderScale: Math.min(window.devicePixelRatio || 1, 2),
   sceneLoaded: false,
   followBodyId: null,
@@ -56,6 +57,10 @@ const TORQUE_DRAG_MAX = 20.0;
 
 // show view params overlay for debugging
 const SHOW_VIEW_PARAMS = false;
+const HOME_VIEW = {
+  target: [0, 0.85, 0],
+  position: [3.0, 2.0, 3.2],
+};
 
 const el = {
   viewport: document.querySelector("#viewport"),
@@ -66,13 +71,15 @@ const el = {
   follow: document.querySelector("#follow"),
   contacts: document.querySelector("#contacts"),
   viewHome: document.querySelector("#view-home"),
+  drag: document.querySelector("#drag"),
   policy: document.querySelector("#policy"),
   time: document.querySelector("#time"),
   height: document.querySelector("#height"),
-  rtf: document.querySelector("#rtf"),
+  performance: document.querySelector("#performance"),
   connection: document.querySelector("#connection"),
   subtitle: document.querySelector("#subtitle"),
   commandControls: document.querySelector("#command-controls"),
+  commandHelp: document.querySelector("#command-help"),
   viewParams: null,
 };
 
@@ -96,7 +103,6 @@ function initRenderer() {
   three.scene.background = new THREE.Color(0x15202a);
   three.scene.fog = new THREE.Fog(0x15202a, 9, 18);
 
-  three.camera.position.set(3.0, 2.0, 3.2);
   three.renderer.shadowMap.enabled = true;
   three.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   three.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -105,7 +111,7 @@ function initRenderer() {
   initViewParamsOverlay();
 
   three.controls = new SimpleOrbitControls(three.camera, three.renderer.domElement);
-  three.controls.target.set(0, 0.85, 0);
+  resetView();
   three.dragger = new DragForceManager(three.scene, three.camera, three.renderer.domElement, three.controls);
   three.contactGroup.visible = false;
   three.scene.add(three.contactGroup);
@@ -433,10 +439,15 @@ function resize() {
 }
 
 function resetView() {
-  three.controls.target.set(0, 0.85, 0);
-  three.controls.radius = 5.0;
-  three.controls.theta = - 1.10;
-  three.controls.phi = 1.3;
+  const target = new THREE.Vector3(...HOME_VIEW.target);
+  const position = new THREE.Vector3(...HOME_VIEW.position);
+  const offset = position.sub(target);
+  const radius = Math.max(offset.length(), 0.001);
+
+  three.controls.target.copy(target);
+  three.controls.radius = radius;
+  three.controls.theta = Math.atan2(offset.x, offset.z);
+  three.controls.phi = Math.acos(Math.max(-1, Math.min(1, offset.y / radius)));
   three.controls.update();
 }
 
@@ -553,7 +564,7 @@ function renderStatus(payload, options = {}) {
   el.policy.textContent = payload.policy || "-";
   el.time.textContent = `${Number(payload.time || 0).toFixed(3)} s`;
   el.height.textContent = `${Number(payload.height || 0).toFixed(3)} m`;
-  el.rtf.textContent = Number(payload.rtf || 0).toFixed(2);
+  el.performance.textContent = `${Number(payload.rtf || 0).toFixed(2)} RTF`;
   if (payload.robot) {
     el.subtitle.textContent = `${payload.robot} / ${payload.terrain}`;
   }
@@ -654,6 +665,34 @@ function applyCommandSchema(schema) {
   buildCommandControls(schema);
   updateCommandInputs(state.command);
   updateCommandDisplay(state.command);
+  updateCommandHelp(schema);
+}
+
+function updateCommandHelp(schema) {
+  if (!el.commandHelp) {
+    return;
+  }
+  const pairs = [];
+  for (const dim of schema?.dims || []) {
+    const hotkeys = dim.hotkeys || {};
+    if (hotkeys.positive || hotkeys.negative) {
+      pairs.push(`${formatKey(hotkeys.positive)}/${formatKey(hotkeys.negative)} ${dim.label}`);
+    }
+  }
+  el.commandHelp.innerHTML = `<b>Command:</b> ${pairs.length ? pairs.join(" · ") : "use the panel controls"}`;
+}
+
+function formatKey(code) {
+  if (!code) {
+    return "-";
+  }
+  if (code.startsWith("Key")) {
+    return code.slice(3);
+  }
+  if (code.startsWith("Digit")) {
+    return code.slice(5);
+  }
+  return code.replace(/^Arrow/, "");
 }
 
 function buildCommandControls(schema) {
@@ -777,6 +816,11 @@ el.contacts.addEventListener("click", () => {
 
 el.viewHome.addEventListener("click", resetView);
 
+el.drag.addEventListener("click", () => {
+  state.dragEnabled = !state.dragEnabled;
+  el.drag.setAttribute("aria-pressed", String(state.dragEnabled));
+});
+
 window.addEventListener("keydown", (event) => {
   if (event.code === "Space") {
     event.preventDefault();
@@ -822,6 +866,7 @@ async function main() {
     el.loading.textContent = "Loading scene";
     el.follow.setAttribute("aria-pressed", "true");
     el.contacts.setAttribute("aria-pressed", "false");
+    el.drag.setAttribute("aria-pressed", "true");
     await loadScene();
     resetView();
     frameLoop();
@@ -1072,7 +1117,7 @@ function DragForceManager(scene, camera, domElement, controls) {
   };
 
   const pointerDown = (event) => {
-    if ((event.button !== 0 && event.button !== 2) || !state.sceneLoaded) {
+    if (!state.dragEnabled || (event.button !== 0 && event.button !== 2) || !state.sceneLoaded) {
       return;
     }
     updateRay(event);

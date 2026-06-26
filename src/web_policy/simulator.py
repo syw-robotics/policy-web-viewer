@@ -130,6 +130,11 @@ class OnlineDemoSimulator:
         if self.thread:
             self.thread.join(timeout=2.0)
 
+    def step(self, steps: int = 1) -> None:
+        with self.lock:
+            for _ in range(max(0, int(steps))):
+                self._step_locked()
+
     def set_running(self, running: bool) -> None:
         with self.lock:
             self.running = bool(running)

@@ -18,7 +18,7 @@ from unitree_deploy.obs.observation import ObservationContext
 from unitree_deploy.robot_model.robot_config import DEFAULT_TERRAIN, RobotModel, load_robot_model
 from unitree_deploy.runtime.multi_ckpt import PolicyManager
 from unitree_deploy.utils.viewer_backend import ViewerCameraConfig, load_viewer_camera_config
-from web_policy.command_schema import (
+from policy_web_viewer.command_schema import (
     CommandSchema,
     check_command_schema_compatibility,
     load_command_schema,
@@ -122,7 +122,7 @@ class OnlineDemoSimulator:
         if self.thread and self.thread.is_alive():
             return
         self.alive = True
-        self.thread = threading.Thread(target=self._loop, name="web-policy-sim", daemon=True)
+        self.thread = threading.Thread(target=self._loop, name="policy-web-viewer-sim", daemon=True)
         self.thread.start()
 
     def stop(self) -> None:

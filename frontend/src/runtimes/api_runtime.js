@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 const GEOM = {
   PLANE: 0,
   SPHERE: 2,
@@ -866,6 +868,7 @@ async function main() {
     el.loading.textContent = "Loading scene";
     el.follow.setAttribute("aria-pressed", "true");
     el.contacts.setAttribute("aria-pressed", "false");
+    el.contacts.disabled = false;
     el.drag.setAttribute("aria-pressed", "true");
     await loadScene();
     resetView();

@@ -1,4 +1,3 @@
-import './styles.css';
 import * as THREE from 'three';
 import loadMujoco from 'mujoco-js';
 import * as ort from 'onnxruntime-web';
@@ -8,6 +7,8 @@ const FORCE_DRAG_GAIN = 30.0;
 const FORCE_DRAG_MAX = 80.0;
 const FORCE_DRAG_MAX_OFFSET = FORCE_DRAG_MAX / FORCE_DRAG_GAIN;
 const FORCE_ARROW_MAX_LENGTH = 1.25;
+const CONTACT_FORCE_SCALE = 0.006;
+const CONTACT_FORCE_MAX_LENGTH = 0.8;
 const TORQUE_DRAG_DEADZONE_PX = 10.0;
 const TORQUE_DRAG_GAIN = 0.15;
 const TORQUE_DRAG_MAX = 20.0;
@@ -47,6 +48,7 @@ class RuntimeDemo {
     this.keys = new Set();
     this.running = false;
     this.follow = true;
+    this.showContacts = false;
     this.dragEnabled = true;
     this.alive = false;
 
@@ -85,6 +87,11 @@ class RuntimeDemo {
     this.followTarget = new THREE.Vector3(0, 0.85, 0);
     this.followLerp = 0.08;
     this.followBodyId = null;
+    this.contactGroup = new THREE.Group();
+    this.contactGroup.visible = false;
+    this.contactVisuals = [];
+    this.contactForce = new Float64Array(6);
+    this.scene.add(this.contactGroup);
     this.dragger = new DragForceManager(this);
 
     this.scene.add(new THREE.HemisphereLight(0xcfe7ff, 0x26322d, 1.1));
@@ -318,6 +325,7 @@ class RuntimeDemo {
         }
         this.updateCachedBodies();
       }
+      this.updateContacts();
       const now = performance.now();
       if (now - this.lastRtfTime >= 1000) {
         const simHz = Number(this.manifest.sim_hz || DEFAULT_SIM_HZ);
@@ -414,6 +422,77 @@ class RuntimeDemo {
       getPosition(this.sim.xpos, bodyId, body.position);
       getQuaternion(this.sim.xquat, bodyId, body.quaternion);
     }
+  }
+
+  updateContacts() {
+    this.contactGroup.visible = this.showContacts;
+    if (!this.showContacts || !this.data?.contact) {
+      this.hideUnusedContacts(0);
+      return;
+    }
+
+    const count = Math.max(0, Number(this.data.ncon || 0));
+    for (let i = 0; i < count; i++) {
+      const contact = this.data.contact.get(i);
+      if (!contact) {
+        continue;
+      }
+      const viz = this.contactVizAt(i);
+      viz.visible = true;
+      viz.position.set(contact.pos[0], contact.pos[2], -contact.pos[1]);
+      viz.userData.point.position.set(0, 0, 0);
+      const force = this.contactForceWorld(i, contact);
+      setForceVectorViz(viz.userData.arrow, new THREE.Vector3(), contactForceVector(force));
+    }
+    this.hideUnusedContacts(count);
+  }
+
+  contactVizAt(index) {
+    while (this.contactVisuals.length <= index) {
+      const viz = buildContactViz();
+      this.contactVisuals.push(viz);
+      this.contactGroup.add(viz);
+    }
+    return this.contactVisuals[index];
+  }
+
+  hideUnusedContacts(start) {
+    for (let i = start; i < this.contactVisuals.length; i++) {
+      this.contactVisuals[i].visible = false;
+    }
+  }
+
+  contactForceWorld(index, contact) {
+    this.contactForce.fill(0);
+    this.mujoco.mj_contactForce(this.model, this.data, index, this.contactForce);
+    let localX = this.contactForce[0];
+    let localY = this.contactForce[1];
+    let localZ = this.contactForce[2];
+    if (Math.hypot(localX, localY, localZ) <= 1e-9) {
+      localX = this.contactNormalForceFallback(contact);
+      localY = 0;
+      localZ = 0;
+    }
+    const frame = contact.frame;
+    return new THREE.Vector3(
+      frame[0] * localX + frame[3] * localY + frame[6] * localZ,
+      frame[2] * localX + frame[5] * localY + frame[8] * localZ,
+      -(frame[1] * localX + frame[4] * localY + frame[7] * localZ),
+    );
+  }
+
+  contactNormalForceFallback(contact) {
+    const address = Number(contact.efc_address);
+    const dim = Math.max(1, Number(contact.dim || 1));
+    if (!Number.isInteger(address) || address < 0 || !this.data?.efc_force) {
+      return 0;
+    }
+    let normal = 0;
+    const end = Math.min(address + dim, this.data.efc_force.length);
+    for (let i = address; i < end; i++) {
+      normal += Math.abs(Number(this.data.efc_force[i] || 0));
+    }
+    return normal;
   }
 
   updateFollow() {
@@ -1103,6 +1182,36 @@ function buildForceVectorViz() {
   return group;
 }
 
+function buildContactViz() {
+  const group = new THREE.Group();
+  const point = new THREE.Mesh(
+    new THREE.SphereGeometry(0.025, 16, 8),
+    new THREE.MeshBasicMaterial({ color: 0x55d6ff, depthTest: true }),
+  );
+  const arrow = buildContactForceVectorViz();
+  group.add(point, arrow);
+  group.userData.point = point;
+  group.userData.arrow = arrow;
+  return group;
+}
+
+function buildContactForceVectorViz() {
+  const group = new THREE.Group();
+  const material = new THREE.MeshPhysicalMaterial({
+    color: 0x55d6ff,
+    emissive: 0x08384a,
+    emissiveIntensity: 0.45,
+    roughness: 0.35,
+    metalness: 0.02,
+  });
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.014, 1, 16), material);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.045, 1, 20), material);
+  group.add(shaft, head);
+  group.userData.shaft = shaft;
+  group.userData.head = head;
+  return group;
+}
+
 function setForceVectorViz(group, origin, vector) {
   const length = Math.min(vector.length(), 1.35);
   if (length < 1e-5) {
@@ -1146,6 +1255,14 @@ function forceArrowVector(offset) {
     return new THREE.Vector3();
   }
   return force.setLength((forceNorm / FORCE_DRAG_MAX) * FORCE_ARROW_MAX_LENGTH);
+}
+
+function contactForceVector(force) {
+  const forceNorm = force.length();
+  if (forceNorm <= 1e-6) {
+    return new THREE.Vector3();
+  }
+  return force.setLength(Math.min(forceNorm * CONTACT_FORCE_SCALE, CONTACT_FORCE_MAX_LENGTH));
 }
 
 function buildTorqueCubeViz() {
@@ -1372,6 +1489,7 @@ async function main() {
     await demo.init();
     el.loading.hidden = true;
     el.connection.textContent = 'Ready';
+    el.contacts.disabled = false;
     el.run.addEventListener('click', () => {
       demo.running = !demo.running;
     });
@@ -1380,6 +1498,13 @@ async function main() {
     el.follow.addEventListener('click', () => {
       demo.follow = !demo.follow;
       el.follow.setAttribute('aria-pressed', String(demo.follow));
+    });
+    el.contacts.addEventListener('click', () => {
+      demo.showContacts = !demo.showContacts;
+      el.contacts.setAttribute('aria-pressed', String(demo.showContacts));
+      if (!demo.showContacts) {
+        demo.hideUnusedContacts(0);
+      }
     });
     el.drag.addEventListener('click', () => {
       demo.dragEnabled = !demo.dragEnabled;

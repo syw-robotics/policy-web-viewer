@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import subprocess
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
@@ -11,7 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from unitree_deploy.robot_model.robot_config import DEFAULT_ROBOT, DEFAULT_TERRAIN
-from web_policy.simulator import OnlineDemoSimulator, build_config
+from policy_web_viewer.simulator import OnlineDemoSimulator, build_config
 
 
 STATIC_TYPES = {
@@ -19,6 +20,7 @@ STATIC_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".json": "application/json; charset=utf-8",
+    ".wasm": "application/wasm",
 }
 
 
@@ -101,7 +103,7 @@ class DemoHandler(BaseHTTPRequestHandler):
             if not parts or any(part in (".", "..") for part in parts):
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
-            resource = resources.files("web_policy.static")
+            resource = resources.files("policy_web_viewer.static")
             for part in parts:
                 resource = resource / part
             if not resource.is_file():
@@ -161,6 +163,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    ensure_api_frontend_built()
     config = build_config(
         ckpt=args.ckpt,
         multi_ckpt=args.multi_ckpt,
@@ -173,7 +176,7 @@ def main() -> None:
     simulator.start()
     server = DemoServer((args.host, args.port), simulator)
     url = f"http://{args.host}:{args.port}"
-    print(f"[web-policy] serving {url}  robot={config.robot.name} ckpt={config.ckpt_dir}", flush=True)
+    print(f"[policy-web-viewer] serving {url}  robot={config.robot.name} ckpt={config.ckpt_dir}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -181,6 +184,36 @@ def main() -> None:
     finally:
         server.server_close()
         simulator.stop()
+
+
+def ensure_api_frontend_built() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    package_json = repo_root / "package.json"
+    frontend_root = repo_root / "frontend"
+    static_index = repo_root / "src" / "policy_web_viewer" / "static" / "index.html"
+    if not package_json.exists() or not frontend_root.exists():
+        return
+    source_paths = [
+        frontend_root / "index.html",
+        *frontend_root.joinpath("src").glob("**/*"),
+        package_json,
+    ]
+    latest_source = max((path.stat().st_mtime for path in source_paths if path.is_file()), default=0)
+    static_mtime = static_index.stat().st_mtime if static_index.exists() else 0
+    if static_mtime >= latest_source:
+        return
+    try:
+        subprocess.run(["npm", "run", "build:api"], cwd=repo_root, check=True)
+    except FileNotFoundError as exc:
+        if static_index.exists():
+            print("[policy-web-viewer] npm not found; using existing static frontend", flush=True)
+            return
+        raise RuntimeError("npm is required to build the policy-web-viewer frontend") from exc
+    except subprocess.CalledProcessError as exc:
+        if static_index.exists():
+            print("[policy-web-viewer] frontend build failed; using existing static frontend", flush=True)
+            return
+        raise RuntimeError("failed to build the policy-web-viewer frontend") from exc
 
 
 if __name__ == "__main__":

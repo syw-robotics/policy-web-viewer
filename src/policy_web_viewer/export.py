@@ -9,7 +9,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from unitree_deploy.robot_model.robot_config import DEFAULT_ROBOT, DEFAULT_TERRAIN
-from web_policy.simulator import OnlineDemoSimulator, build_config
+from policy_web_viewer.simulator import OnlineDemoSimulator, build_config
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +39,7 @@ def main() -> None:
     )
 
 
+# Main function to export a WASM demo
 def export_wasm_demo(
     *,
     out: Path,
@@ -68,7 +69,7 @@ def export_wasm_demo(
         _build_wasm_runtime(output_dir)
     else:
         _prepare_output_dir(output_dir, overwrite=overwrite)
-        runtime_root = Path(__file__).resolve().parents[2] / "web_runtime"
+        runtime_root = Path(__file__).resolve().parents[2] / "frontend"
         shutil.copytree(runtime_root, output_dir / "runtime-source", dirs_exist_ok=True)
 
     demo_dir = output_dir / "demo"
@@ -81,7 +82,7 @@ def export_wasm_demo(
     _write_json(
         demo_dir / "manifest.json",
         {
-            "format": "web-policy-wasm-v1",
+            "format": "policy-web-viewer-wasm-v1",
             "mode": "wasm",
             "scene_xml": scene_xml,
             "policy_config": "policy/policy.json",
@@ -106,9 +107,10 @@ def export_wasm_demo(
     )
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
     (output_dir / "README.md").write_text(_wasm_readme(config.robot.name), encoding="utf-8")
-    print(f"[web-policy-export] wrote browser-sim demo to {output_dir}")
+    print(f"[policy-web-viewer-export] wrote browser-sim demo to {output_dir}")
 
 
+# Prepare the output directory, removing it if it exists and overwrite is True
 def _prepare_output_dir(path: Path, *, overwrite: bool) -> None:
     if path.exists():
         if not overwrite:
@@ -117,6 +119,7 @@ def _prepare_output_dir(path: Path, *, overwrite: bool) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+# Build the WASM runtime using npm and Vite, writing to the output directory
 def _build_wasm_runtime(output_dir: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     cmd = ["npm", "run", "build:wasm", "--", "--outDir", str(output_dir), "--emptyOutDir"]
@@ -126,10 +129,11 @@ def _build_wasm_runtime(output_dir: Path) -> None:
         raise RuntimeError("npm is required to build browser exports") from exc
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
-            "failed to build the browser runtime; run `npm install` in the web_policy repo first"
+            "failed to build the browser runtime; run `npm install` in the policy_web_viewer repo first"
         ) from exc
 
 
+# Write a MuJoCo XML scene for the browser runtime, copying meshes and assets
 def _write_browser_scene(robot, scenes_dir: Path) -> str:
     scene_name = robot.name
     scene_dir = scenes_dir / scene_name
@@ -172,6 +176,7 @@ def _write_browser_scene(robot, scenes_dir: Path) -> str:
     return f"{scene_name}/{xml_name}"
 
 
+# Copy all files from a source directory to a target directory
 def _copy_tree_files(source_dir: Path, target_dir: Path) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
     for source in source_dir.rglob("*"):
@@ -182,6 +187,7 @@ def _copy_tree_files(source_dir: Path, target_dir: Path) -> None:
         shutil.copy2(source, target)
 
 
+# Write the policy ONNX and metadata for the browser runtime
 def _write_browser_policy(simulator: OnlineDemoSimulator, policy_dir: Path) -> None:
     policy_dir.mkdir(parents=True, exist_ok=True)
     profile = simulator.profile
@@ -189,7 +195,7 @@ def _write_browser_policy(simulator: OnlineDemoSimulator, policy_dir: Path) -> N
     onnx_target = policy_dir / "policy.onnx"
     shutil.copy2(policy.model_path, onnx_target)
     payload = {
-        "format": "web-policy-browser-policy-v1",
+        "format": "policy-web-viewer-browser-policy-v1",
         "onnx_path": "./demo/policy/policy.onnx",
         "policy_input_name": policy.input_name,
         "policy_output_name": policy.action_output_name,
@@ -211,16 +217,10 @@ def _write_browser_policy(simulator: OnlineDemoSimulator, policy_dir: Path) -> N
     _write_json(policy_dir / "policy.json", payload, indent=2)
 
 
-def _write_json(path: Path, payload, *, indent: int | None = None) -> None:
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=indent, separators=None if indent else (",", ":")),
-        encoding="utf-8",
-    )
-
-
+# Export a README.md in the exported WASM folder
 def _wasm_readme(robot: str) -> str:
     return (
-        f"# web-policy browser simulation demo ({robot})\n\n"
+        f"# policy-web-viewer browser simulation demo ({robot})\n\n"
         "This directory is a static browser runtime. It runs MuJoCo WASM and ONNX Runtime Web in the browser, "
         "so command sliders and drag forces affect the live simulation.\n\n"
         "Deploy the contents of this directory to GitHub Pages. For local inspection, serve it with:\n\n"
@@ -228,6 +228,15 @@ def _wasm_readme(robot: str) -> str:
         "python3 -m http.server 8080\n"
         "```\n"
     )
+
+
+# Write a JSON file with UTF-8 encoding
+def _write_json(path: Path, payload, *, indent: int | None = None) -> None:
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=indent, separators=None if indent else (",", ":")),
+        encoding="utf-8",
+    )
+
 
 
 if __name__ == "__main__":

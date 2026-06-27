@@ -1,5 +1,5 @@
 [project]
-name = "web-policy"
+name = "policy-web-viewer"
 version = "0.1.0"
 description = "Browser-based MuJoCo viewer for trained Unitree policy checkpoints."
 readme = "README.md"
@@ -10,8 +10,8 @@ dependencies = [
 ]
 
 [project.scripts]
-web-policy = "web_policy.server:main"
-web-policy-export = "web_policy.export:main"
+policy-web-viewer = "policy_web_viewer.server:main"
+policy-web-viewer-export = "policy_web_viewer.export:main"
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]
@@ -21,7 +21,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-web_policy = ["static/**/*"]
+policy_web_viewer = ["static/**/*"]
 
 [tool.setuptools.exclude-package-data]
-web_policy = ["**/__pycache__/*", "**/*.pyc"]
+policy_web_viewer = ["**/__pycache__/*", "**/*.pyc"]

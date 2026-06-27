@@ -130,7 +130,7 @@ def check_command_schema_compatibility(schemas: Mapping[str, CommandSchema]) -> 
         dim_names = [dim.name for dim in schema.dims]
         if dim_names != first_dim_names:
             raise ValueError(
-                "all switchable web-policy command schemas must use compatible dim names; "
+                "all switchable policy-web-viewer command schemas must use compatible dim names; "
                 f"{name!r} has {dim_names}, {first_name!r} has {first_dim_names}"
             )
 

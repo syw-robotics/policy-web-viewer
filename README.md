@@ -1,56 +1,141 @@
-# web-policy
+# policy-web-viewer
 
-`web-policy` is a browser-based MuJoCo viewer for trained Unitree policy checkpoints. It intentionally lives outside `unitree-deploy`: `unitree-deploy` owns policy loading, observation construction, robot assets, and runtime primitives; this project owns the static web UI and the presentation server.
+Browser-based MuJoCo policy viewer for trained Unitree checkpoints.
 
-## Quick start
+The intended workflow is:
 
-Install both projects in the same Python environment:
+1. Develop and tune the demo locally with `policy-web-viewer`.
+2. Export the same UI as a static MuJoCo WASM site with `policy-web-viewer-export`.
+3. Deploy the exported folder with GitHub Pages.
+
+## Quick Start
+
+Install `unitree-deploy` and this project in the same Python environment:
 
 ```bash
 pip install -e /home/syw/.gitrepos/unitree-deploy
 pip install -e /home/syw/.gitrepos/web_policy
-```
-
-Run a checkpoint:
-
-```bash
-web-policy --robot g1 --ckpt /home/syw/.gitrepos/unitree-deploy/ckpt/g1/vanilla_ppo_flat
-```
-
-Open `http://127.0.0.1:8000`.
-
-## Static GitHub Pages export
-
-After tuning a local demo, export a static browser simulation folder:
-
-```bash
 npm install
+```
 
-web-policy-export \
+Run the local API-backed demo:
+
+```bash
+policy-web-viewer \
+  --robot g1 \
+  --ckpt /home/syw/.gitrepos/unitree-deploy/ckpt/g1/vanilla_ppo_flat
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+`--ckpt` should point to the checkpoint directory, not `policy.yaml`.
+
+## Export Static Demo
+
+After the local demo behaves correctly, export a static browser simulation:
+
+```bash
+policy-web-viewer-export \
   --robot g1 \
   --ckpt /home/syw/.gitrepos/unitree-deploy/ckpt/g1/vanilla_ppo_flat \
   --out export/g1-demo \
   --overwrite
 ```
 
-The export builds a self-contained static site that runs MuJoCo WASM and ONNX
-Runtime Web in the browser. Command sliders and left-drag external forces affect
-the live simulation. Push the output folder contents to a GitHub repository and
-enable GitHub Pages for that branch or folder.
-
-For local inspection:
+Inspect locally:
 
 ```bash
 cd export/g1-demo
 python3 -m http.server 8080
 ```
 
-## UI command schema
+Then open:
 
-Each checkpoint can provide a `web_policy.yaml` or `web_demo.yaml` next to `policy.yaml` to describe the command controls shown in the browser. The current runtime keeps `web_demo.yaml` compatibility for migrated checkpoints; new templates should use `web_policy.yaml`.
+```text
+http://127.0.0.1:8080
+```
 
-A velocity-tracking example is available at `templates/velocity_command.yaml`.
+The exported folder is static and can be pushed to a GitHub repository for GitHub Pages.
 
-## Template direction
+## Project Structure
 
-See `docs/TEMPLATE_PROPOSAL.md` for the proposed template structure and customization workflow.
+```text
+frontend/
+  index.html                    # Shared page shell
+  src/
+    bootstrap.js                # Selects local API or WASM runtime at build time
+    styles.css                  # Shared UI styling
+    runtimes/
+      api_runtime.js            # Local policy-web-viewer /api runtime
+      wasm_runtime.js           # Static MuJoCo WASM + ONNX Runtime Web runtime
+
+src/policy_web_viewer/
+  server.py                     # Local HTTP server and API
+  simulator.py                  # Python MuJoCo + policy loop
+  export.py                     # Static export builder
+  command_schema.py             # Browser command control schema
+  static/                       # Generated local frontend assets; do not edit directly
+```
+
+## Frontend Source Of Truth
+
+There is one frontend source tree: `frontend/`.
+
+Do edit:
+
+```text
+frontend/index.html
+frontend/src/styles.css
+frontend/src/runtimes/api_runtime.js
+frontend/src/runtimes/wasm_runtime.js
+```
+
+Do not edit generated files in:
+
+```text
+src/policy_web_viewer/static/
+```
+
+Build targets:
+
+```bash
+npm run build:api    # builds local policy-web-viewer frontend into src/policy_web_viewer/static/
+npm run build:wasm   # builds static export frontend
+```
+
+`policy-web-viewer` automatically rebuilds the local frontend if `frontend/` is newer than `src/policy_web_viewer/static/`.
+
+## Runtime Differences
+
+Both runtimes share the same HTML and CSS. The runtime adapters differ only where the execution environment differs:
+
+- Local `policy-web-viewer` uses the Python `/api` server and Python MuJoCo policy loop.
+- Static export uses MuJoCo WASM and ONNX Runtime Web in the browser.
+
+Keep user-facing UI changes in shared files when possible. Runtime-specific behavior belongs in `frontend/src/runtimes/`.
+
+## Command Schema
+
+Place `web_policy.yaml` next to `policy.yaml` when a checkpoint needs custom browser command controls and hotkeys. If it is absent, `policy-web-viewer` tries to infer the default 3D velocity command schema from the policy config.
+
+## Useful Commands
+
+Run on another port if `8000` is occupied:
+
+```bash
+policy-web-viewer \
+  --robot g1 \
+  --ckpt /home/syw/.gitrepos/unitree-deploy/ckpt/g1/vanilla_ppo_flat \
+  --port 8001
+```
+
+Find and stop a process using port `8000`:
+
+```bash
+lsof -iTCP:8000 -sTCP:LISTEN -n -P
+kill <PID>
+```

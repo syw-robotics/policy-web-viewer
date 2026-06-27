@@ -1,9 +1,10 @@
 {
-  "name": "web-policy-runtime",
+  "name": "policy-web-viewer-frontend",
   "private": true,
   "type": "module",
   "scripts": {
-    "build:wasm": "vite build web_runtime"
+    "build:api": "VITE_POLICY_WEB_VIEWER_RUNTIME=api vite build frontend --outDir ../src/policy_web_viewer/static --emptyOutDir --base /static/",
+    "build:wasm": "VITE_POLICY_WEB_VIEWER_RUNTIME=wasm vite build frontend --base ./"
   },
   "dependencies": {
     "mujoco-js": "^0.0.7",

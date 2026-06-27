@@ -1,19 +1,24 @@
 import * as THREE from 'three';
 import loadMujoco from 'mujoco-js';
 import * as ort from 'onnxruntime-web';
+import {
+  CAMERA_CONFIG,
+  CONTACT_CONFIG,
+  FLOOR_CONFIG,
+  FORCE_CONFIG,
+  GEOM_MATERIAL_CONFIG,
+  HOME_VIEW,
+  LIGHT_CONFIG,
+  ORBIT_CONFIG,
+  RUNTIME_CONFIG,
+  SCENE_CONFIG,
+  SHADOW_CONFIG,
+  TORQUE_CONFIG,
+  formatHomeViewOverlay,
+} from '../render_config.js';
 
 const MANIFEST_URL = './demo/manifest.json';
-const FORCE_DRAG_GAIN = 30.0;
-const FORCE_DRAG_MAX = 80.0;
-const FORCE_DRAG_MAX_OFFSET = FORCE_DRAG_MAX / FORCE_DRAG_GAIN;
-const FORCE_ARROW_MAX_LENGTH = 1.25;
-const CONTACT_FORCE_SCALE = 0.006;
-const CONTACT_FORCE_MAX_LENGTH = 0.8;
-const TORQUE_DRAG_DEADZONE_PX = 10.0;
-const TORQUE_DRAG_GAIN = 0.15;
-const TORQUE_DRAG_MAX = 20.0;
-const DRAG_DEADLINE_MS = 150.0;
-const DEFAULT_SIM_HZ = 1000.0;
+const FORCE_DRAG_MAX_OFFSET = FORCE_CONFIG.dragMax / FORCE_CONFIG.dragGain;
 
 const el = {
   viewport: document.querySelector('#viewport'),
@@ -33,6 +38,7 @@ const el = {
   connection: document.querySelector('#connection'),
   commandControls: document.querySelector('#command-controls'),
   commandHelp: document.querySelector('#command-help'),
+  viewParams: null,
 };
 
 class RuntimeDemo {
@@ -71,20 +77,21 @@ class RuntimeDemo {
     this.lastRtfTime = performance.now();
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x15202a);
-    this.scene.fog = new THREE.Fog(0x15202a, 9, 18);
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+    this.scene.background = new THREE.Color(SCENE_CONFIG.background);
+    this.scene.fog = new THREE.Fog(SCENE_CONFIG.background, SCENE_CONFIG.fogNear, SCENE_CONFIG.fogFar);
+    this.camera = new THREE.PerspectiveCamera(CAMERA_CONFIG.fov, 1, CAMERA_CONFIG.near, CAMERA_CONFIG.far);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.outputEncoding = THREE.sRGBEncoding;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, SCENE_CONFIG.maxPixelRatio));
     el.viewport.appendChild(this.renderer.domElement);
+    this.initViewParamsOverlay();
 
     this.controls = new SimpleOrbitControls(this.camera, this.renderer.domElement);
 
-    this.followTarget = new THREE.Vector3(0, 0.85, 0);
+    this.followTarget = new THREE.Vector3(...HOME_VIEW.target);
     this.followLerp = 0.08;
     this.followBodyId = null;
     this.contactGroup = new THREE.Group();
@@ -94,24 +101,28 @@ class RuntimeDemo {
     this.scene.add(this.contactGroup);
     this.dragger = new DragForceManager(this);
 
-    this.scene.add(new THREE.HemisphereLight(0xcfe7ff, 0x26322d, 1.1));
-    this.keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
-    this.keyLight.position.set(4.5, 7.5, 4.0);
+    this.scene.add(new THREE.HemisphereLight(
+      LIGHT_CONFIG.hemisphereSky,
+      LIGHT_CONFIG.hemisphereGround,
+      LIGHT_CONFIG.hemisphereIntensity,
+    ));
+    this.keyLight = new THREE.DirectionalLight(LIGHT_CONFIG.keyColor, LIGHT_CONFIG.keyIntensity);
+    this.keyLight.position.set(...LIGHT_CONFIG.keyOffset);
     this.keyLight.castShadow = true;
-    this.keyLight.shadow.mapSize.set(2048, 2048);
-    this.keyLight.shadow.camera.near = 0.2;
-    this.keyLight.shadow.camera.far = 18;
-    this.keyLight.shadow.camera.left = -7;
-    this.keyLight.shadow.camera.right = 7;
-    this.keyLight.shadow.camera.top = 7;
-    this.keyLight.shadow.camera.bottom = -7;
+    this.keyLight.shadow.mapSize.set(SHADOW_CONFIG.mapSize, SHADOW_CONFIG.mapSize);
+    this.keyLight.shadow.camera.near = SHADOW_CONFIG.near;
+    this.keyLight.shadow.camera.far = SHADOW_CONFIG.far;
+    this.keyLight.shadow.camera.left = SHADOW_CONFIG.left;
+    this.keyLight.shadow.camera.right = SHADOW_CONFIG.right;
+    this.keyLight.shadow.camera.top = SHADOW_CONFIG.top;
+    this.keyLight.shadow.camera.bottom = SHADOW_CONFIG.bottom;
     this.keyLightTarget = new THREE.Object3D();
     this.keyLight.target = this.keyLightTarget;
     this.scene.add(this.keyLight);
     this.scene.add(this.keyLightTarget);
 
-    const rim = new THREE.DirectionalLight(0xa8c8ff, 0.65);
-    rim.position.set(-4, 3, -5);
+    const rim = new THREE.DirectionalLight(LIGHT_CONFIG.rimColor, LIGHT_CONFIG.rimIntensity);
+    rim.position.set(...LIGHT_CONFIG.rimPosition);
     this.scene.add(rim);
 
     window.addEventListener('resize', () => this.resize());
@@ -269,7 +280,7 @@ class RuntimeDemo {
     ];
     let geometry = null;
     if (type === this.mujoco.mjtGeom.mjGEOM_PLANE.value) {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), floorMaterial());
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_CONFIG.size, FLOOR_CONFIG.size), floorMaterial());
       mesh.rotation.x = -Math.PI / 2;
       return mesh;
     }
@@ -328,7 +339,7 @@ class RuntimeDemo {
       this.updateContacts();
       const now = performance.now();
       if (now - this.lastRtfTime >= 1000) {
-        const simHz = Number(this.manifest.sim_hz || DEFAULT_SIM_HZ);
+        const simHz = Number(this.manifest.sim_hz || RUNTIME_CONFIG.defaultSimHz);
         const stepDelta = this.simSteps - this.lastRtfSteps;
         const rtf = stepDelta / (simHz * ((now - this.lastRtfTime) / 1000));
         el.performance.textContent = `${rtf.toFixed(2)} RTF`;
@@ -513,7 +524,7 @@ class RuntimeDemo {
 
   updateShadowFollow(target) {
     this.keyLightTarget.position.copy(target);
-    this.keyLight.position.copy(target).add(new THREE.Vector3(4.5, 7.5, 4.0));
+    this.keyLight.position.copy(target).add(new THREE.Vector3(...LIGHT_CONFIG.keyOffset));
     this.keyLightTarget.updateMatrixWorld();
     this.keyLight.updateMatrixWorld();
   }
@@ -525,8 +536,8 @@ class RuntimeDemo {
   }
 
   resetView() {
-    const target = new THREE.Vector3(0, 0.85, 0);
-    const position = new THREE.Vector3(3.0, 2.0, 3.2);
+    const target = new THREE.Vector3(...HOME_VIEW.target);
+    const position = new THREE.Vector3(...HOME_VIEW.position);
     const offset = position.sub(target);
     const radius = Math.max(offset.length(), 0.001);
     this.controls.target.copy(target);
@@ -587,6 +598,22 @@ class RuntimeDemo {
     this.renderer.setSize(clientWidth, clientHeight, false);
   }
 
+  initViewParamsOverlay() {
+    if (!RUNTIME_CONFIG.showViewParams) {
+      return;
+    }
+    el.viewParams = document.createElement('pre');
+    el.viewParams.className = 'view-params';
+    el.viewport.appendChild(el.viewParams);
+  }
+
+  updateViewParamsOverlay() {
+    if (!el.viewParams || !this.controls) {
+      return;
+    }
+    el.viewParams.textContent = formatHomeViewOverlay(this.controls);
+  }
+
   render() {
     if (!this.model) {
       return;
@@ -594,6 +621,7 @@ class RuntimeDemo {
     this.updateFollow();
     this.controls.update();
     this.dragger.update();
+    this.updateViewParamsOverlay();
     this.renderer.render(this.scene, this.camera);
   }
 }
@@ -860,7 +888,7 @@ class DragForceManager {
     this.localHit.copy(this.bodyObject.worldToLocal(hit.point.clone()));
     this.worldHit.copy(hit.point);
     this.currentWorld.copy(hit.point);
-    this.deadline = performance.now() + DRAG_DEADLINE_MS;
+    this.deadline = performance.now() + FORCE_CONFIG.dragDeadlineMs;
     this.demo.controls.enabled = false;
     this.forceViz.visible = this.mode === 'force';
     this.torqueViz.visible = this.mode === 'torque';
@@ -879,19 +907,19 @@ class DragForceManager {
       const dragX = event.clientX - this.startX;
       const dragY = event.clientY - this.startY;
       const amount = Math.hypot(dragX, dragY);
-      if (amount <= TORQUE_DRAG_DEADZONE_PX) {
+      if (amount <= TORQUE_CONFIG.dragDeadzonePx) {
         this.torque.set(0, 0, 0);
       } else {
-        const scale = ((amount - TORQUE_DRAG_DEADZONE_PX) / amount) * TORQUE_DRAG_GAIN;
+        const scale = ((amount - TORQUE_CONFIG.dragDeadzonePx) / amount) * TORQUE_CONFIG.dragGain;
         this.torque.copy(up.multiplyScalar(dragX * scale)).add(right.multiplyScalar(dragY * scale));
       }
-      if (this.torque.length() > TORQUE_DRAG_MAX) {
-        this.torque.setLength(TORQUE_DRAG_MAX);
+      if (this.torque.length() > TORQUE_CONFIG.dragMax) {
+        this.torque.setLength(TORQUE_CONFIG.dragMax);
       }
     } else {
       this.currentWorld.copy(this.raycaster.ray.origin).addScaledVector(this.raycaster.ray.direction, this.grabDistance);
     }
-    this.deadline = performance.now() + DRAG_DEADLINE_MS;
+    this.deadline = performance.now() + FORCE_CONFIG.dragDeadlineMs;
   }
 
   pointerUp(event) {
@@ -941,7 +969,7 @@ function SimpleOrbitControls(camera, domElement) {
   this.camera = camera;
   this.domElement = domElement;
   this.target = new THREE.Vector3();
-  this.radius = 4.8;
+  this.radius = ORBIT_CONFIG.initialRadius;
   this.theta = Math.PI / 4;
   this.phi = Math.PI / 3;
   this.dragging = false;
@@ -973,14 +1001,17 @@ function SimpleOrbitControls(camera, domElement) {
     this.lastX = event.clientX;
     this.lastY = event.clientY;
     if (this.panning) {
-      const scale = this.radius * 0.0012;
+      const scale = this.radius * ORBIT_CONFIG.panSpeed;
       const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
       const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
       this.target.addScaledVector(right, -dx * scale);
       this.target.addScaledVector(up, dy * scale);
     } else {
-      this.theta -= dx * 0.0045;
-      this.phi = Math.max(0.18, Math.min(Math.PI - 0.18, this.phi - dy * 0.0045));
+      this.theta -= dx * ORBIT_CONFIG.rotateSpeed;
+      this.phi = Math.max(
+        ORBIT_CONFIG.minPhi,
+        Math.min(Math.PI - ORBIT_CONFIG.maxPhiMargin, this.phi - dy * ORBIT_CONFIG.rotateSpeed),
+      );
     }
   };
 
@@ -991,7 +1022,10 @@ function SimpleOrbitControls(camera, domElement) {
 
   const wheel = (event) => {
     event.preventDefault();
-    this.radius = Math.max(0.8, Math.min(14, this.radius * Math.exp(event.deltaY * 0.001)));
+    this.radius = Math.max(
+      ORBIT_CONFIG.minRadius,
+      Math.min(ORBIT_CONFIG.maxRadius, this.radius * Math.exp(event.deltaY * ORBIT_CONFIG.zoomSpeed)),
+    );
   };
 
   domElement.addEventListener('pointerdown', pointerDown);
@@ -1241,9 +1275,9 @@ function forceDragOffset(offset) {
 }
 
 function dragForceFromOffset(offset) {
-  const force = forceDragOffset(offset).multiplyScalar(FORCE_DRAG_GAIN);
-  if (force.length() > FORCE_DRAG_MAX) {
-    force.setLength(FORCE_DRAG_MAX);
+  const force = forceDragOffset(offset).multiplyScalar(FORCE_CONFIG.dragGain);
+  if (force.length() > FORCE_CONFIG.dragMax) {
+    force.setLength(FORCE_CONFIG.dragMax);
   }
   return force;
 }
@@ -1254,7 +1288,7 @@ function forceArrowVector(offset) {
   if (forceNorm <= 1e-5) {
     return new THREE.Vector3();
   }
-  return force.setLength((forceNorm / FORCE_DRAG_MAX) * FORCE_ARROW_MAX_LENGTH);
+  return force.setLength((forceNorm / FORCE_CONFIG.dragMax) * FORCE_CONFIG.arrowMaxLength);
 }
 
 function contactForceVector(force) {
@@ -1262,7 +1296,7 @@ function contactForceVector(force) {
   if (forceNorm <= 1e-6) {
     return new THREE.Vector3();
   }
-  return force.setLength(Math.min(forceNorm * CONTACT_FORCE_SCALE, CONTACT_FORCE_MAX_LENGTH));
+  return force.setLength(Math.min(forceNorm * CONTACT_CONFIG.forceScale, CONTACT_CONFIG.forceMaxLength));
 }
 
 function buildTorqueCubeViz() {
@@ -1386,34 +1420,34 @@ function materialForGeom(model, geomId) {
     color: new THREE.Color(rgba[0], rgba[1], rgba[2]),
     transparent: rgba[3] < 1,
     opacity: rgba[3],
-    roughness: 0.52,
-    metalness: 0.03,
-    clearcoat: 0.15,
+    roughness: GEOM_MATERIAL_CONFIG.roughness,
+    metalness: GEOM_MATERIAL_CONFIG.metalness,
+    clearcoat: GEOM_MATERIAL_CONFIG.clearcoat,
   });
 }
 
 function floorMaterial() {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = FLOOR_CONFIG.canvasSize;
+  canvas.height = FLOOR_CONFIG.canvasSize;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#26312e';
+  ctx.fillStyle = FLOOR_CONFIG.baseColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.strokeStyle = FLOOR_CONFIG.lineColor;
   ctx.lineWidth = 2;
-  for (let i = 0; i <= 256; i += 32) {
+  for (let i = 0; i <= FLOOR_CONFIG.canvasSize; i += FLOOR_CONFIG.gridStep) {
     ctx.beginPath();
     ctx.moveTo(i, 0);
-    ctx.lineTo(i, 256);
+    ctx.lineTo(i, FLOOR_CONFIG.canvasSize);
     ctx.moveTo(0, i);
-    ctx.lineTo(256, i);
+    ctx.lineTo(FLOOR_CONFIG.canvasSize, i);
     ctx.stroke();
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(18, 18);
-  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: texture, roughness: 0.86 });
+  texture.repeat.set(...FLOOR_CONFIG.repeat);
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: texture, roughness: FLOOR_CONFIG.roughness });
 }
 
 function readNames(model, kind) {

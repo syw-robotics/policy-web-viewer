@@ -89,20 +89,22 @@ select {
 
 .view-params {
   position: absolute;
-  left: 18px;
+  left: 16px;
   top: 16px;
+  z-index: 4;
+  max-width: min(520px, calc(100% - 32px));
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(149, 163, 184, 0.26);
   border-radius: 6px;
-  background: rgba(10, 13, 16, 0.62);
-  color: var(--text);
+  background: rgba(10, 13, 16, 0.78);
+  color: #dbe5ef;
   font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.45;
   backdrop-filter: blur(8px);
   pointer-events: none;
-  white-space: pre;
+  white-space: pre-wrap;
 }
 
 .panel {

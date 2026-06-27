@@ -1,4 +1,19 @@
 import * as THREE from 'three';
+import {
+  CAMERA_CONFIG,
+  CONTACT_CONFIG,
+  FLOOR_CONFIG,
+  FORCE_CONFIG,
+  GEOM_MATERIAL_CONFIG,
+  HOME_VIEW,
+  LIGHT_CONFIG,
+  ORBIT_CONFIG,
+  RUNTIME_CONFIG,
+  SCENE_CONFIG,
+  SHADOW_CONFIG,
+  TORQUE_CONFIG,
+  formatHomeViewOverlay,
+} from '../render_config.js';
 
 const GEOM = {
   PLANE: 0,
@@ -38,7 +53,7 @@ const state = {
   follow: true,
   showContacts: false,
   dragEnabled: true,
-  renderScale: Math.min(window.devicePixelRatio || 1, 2),
+  renderScale: Math.min(window.devicePixelRatio || 1, SCENE_CONFIG.maxPixelRatio),
   sceneLoaded: false,
   followBodyId: null,
   draggingForce: false,
@@ -46,23 +61,7 @@ const state = {
   commandEditUntil: 0,
 };
 
-// External force and torque drag parameters
-const FORCE_DRAG_GAIN = 30.0;
-const FORCE_DRAG_MAX = 80.0;
-const FORCE_DRAG_MAX_OFFSET = FORCE_DRAG_MAX / FORCE_DRAG_GAIN;
-const FORCE_ARROW_MAX_LENGTH = 1.25;
-const CONTACT_FORCE_SCALE = 0.006;
-const CONTACT_FORCE_MAX_LENGTH = 0.8;
-const TORQUE_DRAG_DEADZONE_PX = 10.0;
-const TORQUE_DRAG_GAIN = 0.15;
-const TORQUE_DRAG_MAX = 20.0;
-
-// show view params overlay for debugging
-const SHOW_VIEW_PARAMS = false;
-const HOME_VIEW = {
-  target: [0, 0.85, 0],
-  position: [3.0, 2.0, 3.2],
-};
+const FORCE_DRAG_MAX_OFFSET = FORCE_CONFIG.dragMax / FORCE_CONFIG.dragGain;
 
 const el = {
   viewport: document.querySelector("#viewport"),
@@ -87,7 +86,7 @@ const el = {
 
 const three = {
   scene: new THREE.Scene(),
-  camera: new THREE.PerspectiveCamera(45, 1, 0.01, 100),
+  camera: new THREE.PerspectiveCamera(CAMERA_CONFIG.fov, 1, CAMERA_CONFIG.near, CAMERA_CONFIG.far),
   renderer: new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" }),
   controls: null,
   dragger: null,
@@ -98,12 +97,12 @@ const three = {
   meshCache: new Map(),
   contactGroup: new THREE.Group(),
   contactVisuals: [],
-  followTarget: new THREE.Vector3(0, 0.85, 0),
+  followTarget: new THREE.Vector3(...HOME_VIEW.target),
 };
 
 function initRenderer() {
-  three.scene.background = new THREE.Color(0x15202a);
-  three.scene.fog = new THREE.Fog(0x15202a, 9, 18);
+  three.scene.background = new THREE.Color(SCENE_CONFIG.background);
+  three.scene.fog = new THREE.Fog(SCENE_CONFIG.background, SCENE_CONFIG.fogNear, SCENE_CONFIG.fogFar);
 
   three.renderer.shadowMap.enabled = true;
   three.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -118,26 +117,30 @@ function initRenderer() {
   three.contactGroup.visible = false;
   three.scene.add(three.contactGroup);
 
-  three.scene.add(new THREE.HemisphereLight(0xcfe7ff, 0x26322d, 1.1));
+  three.scene.add(new THREE.HemisphereLight(
+    LIGHT_CONFIG.hemisphereSky,
+    LIGHT_CONFIG.hemisphereGround,
+    LIGHT_CONFIG.hemisphereIntensity,
+  ));
 
-  const key = new THREE.DirectionalLight(0xffffff, 2.2);
-  key.position.set(4, 6, 3);
+  const key = new THREE.DirectionalLight(LIGHT_CONFIG.keyColor, LIGHT_CONFIG.keyIntensity);
+  key.position.set(...LIGHT_CONFIG.keyOffset);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.camera.near = 0.2;
-  key.shadow.camera.far = 18;
-  key.shadow.camera.left = -7;
-  key.shadow.camera.right = 7;
-  key.shadow.camera.top = 7;
-  key.shadow.camera.bottom = -7;
+  key.shadow.mapSize.set(SHADOW_CONFIG.mapSize, SHADOW_CONFIG.mapSize);
+  key.shadow.camera.near = SHADOW_CONFIG.near;
+  key.shadow.camera.far = SHADOW_CONFIG.far;
+  key.shadow.camera.left = SHADOW_CONFIG.left;
+  key.shadow.camera.right = SHADOW_CONFIG.right;
+  key.shadow.camera.top = SHADOW_CONFIG.top;
+  key.shadow.camera.bottom = SHADOW_CONFIG.bottom;
   key.target.position.set(0, 0, 0);
   three.scene.add(key);
   three.scene.add(key.target);
   three.keyLight = key;
   three.keyLightTarget = key.target;
 
-  const rim = new THREE.DirectionalLight(0xa8c8ff, 0.65);
-  rim.position.set(-4, 3, -5);
+  const rim = new THREE.DirectionalLight(LIGHT_CONFIG.rimColor, LIGHT_CONFIG.rimIntensity);
+  rim.position.set(...LIGHT_CONFIG.rimPosition);
   three.scene.add(rim);
 
   window.addEventListener("resize", resize);
@@ -197,7 +200,7 @@ function buildGeom(geom, meshes) {
   let geometry;
 
   if (geom.type === GEOM.PLANE) {
-    geometry = new THREE.PlaneGeometry(120, 120);
+    geometry = new THREE.PlaneGeometry(FLOOR_CONFIG.size, FLOOR_CONFIG.size);
     const mesh = new THREE.Mesh(geometry, floorMaterial());
     mesh.rotation.x = -Math.PI / 2;
     mesh.receiveShadow = true;
@@ -264,9 +267,9 @@ function materialFor(rgba) {
   const color = new THREE.Color(rgba[0], rgba[1], rgba[2]);
   return new THREE.MeshPhysicalMaterial({
     color,
-    roughness: 0.52,
-    metalness: 0.03,
-    clearcoat: 0.15,
+    roughness: GEOM_MATERIAL_CONFIG.roughness,
+    metalness: GEOM_MATERIAL_CONFIG.metalness,
+    clearcoat: GEOM_MATERIAL_CONFIG.clearcoat,
     transparent: rgba[3] < 1,
     opacity: rgba[3],
   });
@@ -274,26 +277,26 @@ function materialFor(rgba) {
 
 function floorMaterial() {
   const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = FLOOR_CONFIG.canvasSize;
+  canvas.height = FLOOR_CONFIG.canvasSize;
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#26312e";
+  ctx.fillStyle = FLOOR_CONFIG.baseColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.strokeStyle = FLOOR_CONFIG.lineColor;
   ctx.lineWidth = 2;
-  for (let i = 0; i <= 256; i += 32) {
+  for (let i = 0; i <= FLOOR_CONFIG.canvasSize; i += FLOOR_CONFIG.gridStep) {
     ctx.beginPath();
     ctx.moveTo(i, 0);
-    ctx.lineTo(i, 256);
+    ctx.lineTo(i, FLOOR_CONFIG.canvasSize);
     ctx.moveTo(0, i);
-    ctx.lineTo(256, i);
+    ctx.lineTo(FLOOR_CONFIG.canvasSize, i);
     ctx.stroke();
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(18, 18);
-  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: texture, roughness: 0.86 });
+  texture.repeat.set(...FLOOR_CONFIG.repeat);
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, map: texture, roughness: FLOOR_CONFIG.roughness });
 }
 
 function buildContactViz() {
@@ -383,7 +386,7 @@ function contactForceVector(force) {
   if (forceNorm <= 1e-6) {
     return new THREE.Vector3();
   }
-  return vector.setLength(Math.min(forceNorm * CONTACT_FORCE_SCALE, CONTACT_FORCE_MAX_LENGTH));
+  return vector.setLength(Math.min(forceNorm * CONTACT_CONFIG.forceScale, CONTACT_CONFIG.forceMaxLength));
 }
 
 function updateBodies(bodies) {
@@ -454,7 +457,7 @@ function resetView() {
 }
 
 function initViewParamsOverlay() {
-  if (!SHOW_VIEW_PARAMS) {
+  if (!RUNTIME_CONFIG.showViewParams) {
     return;
   }
   el.viewParams = document.createElement("pre");
@@ -466,18 +469,8 @@ function updateViewParamsOverlay() {
   if (!el.viewParams || !three.controls) {
     return;
   }
-  const target = three.controls.target;
-  el.viewParams.textContent = [
-    "Home view params",
-    `target.set(${fmt(target.x)}, ${fmt(target.y)}, ${fmt(target.z)});`,
-    `radius = ${fmt(three.controls.radius)};`,
-    `theta = ${fmt(three.controls.theta)}; // ${fmt(radToDeg(three.controls.theta), 1)} deg`,
-    `phi = ${fmt(three.controls.phi)}; // ${fmt(radToDeg(three.controls.phi), 1)} deg`,
-  ].join("\n");
+  el.viewParams.textContent = formatHomeViewOverlay(three.controls);
 }
-
-const fmt = (value, digits = 3) => Number(value).toFixed(digits);
-const radToDeg = (value) => (value * 180) / Math.PI;
 
 const activeCommand = () => {
   if (state.keyboardCommandActive) {
@@ -886,7 +879,7 @@ function SimpleOrbitControls(camera, domElement) {
   this.camera = camera;
   this.domElement = domElement;
   this.target = new THREE.Vector3();
-  this.radius = 4.8;
+  this.radius = ORBIT_CONFIG.initialRadius;
   this.theta = Math.PI / 4;
   this.phi = Math.PI / 3;
   this.dragging = false;
@@ -917,14 +910,17 @@ function SimpleOrbitControls(camera, domElement) {
     this.lastX = event.clientX;
     this.lastY = event.clientY;
     if (this.panning) {
-      const scale = this.radius * 0.0012;
+      const scale = this.radius * ORBIT_CONFIG.panSpeed;
       const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
       const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
       this.target.addScaledVector(right, -dx * scale);
       this.target.addScaledVector(up, dy * scale);
     } else {
-      this.theta -= dx * 0.0045;
-      this.phi = Math.max(0.18, Math.min(Math.PI - 0.18, this.phi - dy * 0.0045));
+      this.theta -= dx * ORBIT_CONFIG.rotateSpeed;
+      this.phi = Math.max(
+        ORBIT_CONFIG.minPhi,
+        Math.min(Math.PI - ORBIT_CONFIG.maxPhiMargin, this.phi - dy * ORBIT_CONFIG.rotateSpeed),
+      );
     }
   };
   const pointerUp = (event) => {
@@ -933,7 +929,10 @@ function SimpleOrbitControls(camera, domElement) {
   };
   const wheel = (event) => {
     event.preventDefault();
-    this.radius = Math.max(0.8, Math.min(14, this.radius * Math.exp(event.deltaY * 0.001)));
+    this.radius = Math.max(
+      ORBIT_CONFIG.minRadius,
+      Math.min(ORBIT_CONFIG.maxRadius, this.radius * Math.exp(event.deltaY * ORBIT_CONFIG.zoomSpeed)),
+    );
   };
 
   domElement.addEventListener("pointerdown", pointerDown);
@@ -1014,9 +1013,9 @@ function forceDragOffset(offset) {
 }
 
 function dragForceFromOffset(offset) {
-  const force = forceDragOffset(offset).multiplyScalar(FORCE_DRAG_GAIN);
-  if (force.length() > FORCE_DRAG_MAX) {
-    force.setLength(FORCE_DRAG_MAX);
+  const force = forceDragOffset(offset).multiplyScalar(FORCE_CONFIG.dragGain);
+  if (force.length() > FORCE_CONFIG.dragMax) {
+    force.setLength(FORCE_CONFIG.dragMax);
   }
   return force;
 }
@@ -1027,7 +1026,7 @@ function forceArrowVector(offset) {
   if (forceNorm <= 1e-5) {
     return new THREE.Vector3();
   }
-  return force.setLength((forceNorm / FORCE_DRAG_MAX) * FORCE_ARROW_MAX_LENGTH);
+  return force.setLength((forceNorm / FORCE_CONFIG.dragMax) * FORCE_CONFIG.arrowMaxLength);
 }
 
 function buildTorqueCubeViz() {
@@ -1167,14 +1166,14 @@ function DragForceManager(scene, camera, domElement, controls) {
       const dragY = event.clientY - this.startY;
       const drag = new THREE.Vector2(dragX, dragY);
       const amount = drag.length();
-      if (amount <= TORQUE_DRAG_DEADZONE_PX) {
+      if (amount <= TORQUE_CONFIG.dragDeadzonePx) {
         this.torque.set(0, 0, 0);
       } else {
-        const scale = ((amount - TORQUE_DRAG_DEADZONE_PX) / amount) * TORQUE_DRAG_GAIN;
+        const scale = ((amount - TORQUE_CONFIG.dragDeadzonePx) / amount) * TORQUE_CONFIG.dragGain;
         this.torque.copy(up.multiplyScalar(dragX * scale)).add(right.multiplyScalar(dragY * scale));
       }
-      if (this.torque.length() > TORQUE_DRAG_MAX) {
-        this.torque.setLength(TORQUE_DRAG_MAX);
+      if (this.torque.length() > TORQUE_CONFIG.dragMax) {
+        this.torque.setLength(TORQUE_CONFIG.dragMax);
       }
     } else {
       this.currentWorld.copy(this.raycaster.ray.origin).addScaledVector(

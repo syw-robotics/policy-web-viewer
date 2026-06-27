@@ -1,6 +1,7 @@
 node_modules/
 export/
 dist/
+src/policy_web_viewer/static/
 __pycache__/
 *.pyc
 *.egg-info/

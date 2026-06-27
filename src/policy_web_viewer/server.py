@@ -87,8 +87,6 @@ class DemoHandler(BaseHTTPRequestHandler):
             simulator.set_running(False)
         elif action == "reset":
             simulator.reset()
-        elif action == "switch_policy":
-            simulator.switch_next_policy()
         else:
             raise ValueError(f"unknown control action: {action}")
         self._send_json(simulator.status())

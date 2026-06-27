@@ -25,7 +25,6 @@ const el = {
   loading: document.querySelector('#loading'),
   run: document.querySelector('#run'),
   reset: document.querySelector('#reset'),
-  switchPolicy: document.querySelector('#switch-policy'),
   viewHome: document.querySelector('#view-home'),
   follow: document.querySelector('#follow'),
   contacts: document.querySelector('#contacts'),

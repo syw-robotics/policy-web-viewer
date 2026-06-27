@@ -19,8 +19,6 @@ from unitree_deploy.robot_model.robot_config import DEFAULT_TERRAIN, RobotModel,
 from unitree_deploy.runtime.multi_ckpt import PolicyManager
 from unitree_deploy.utils.viewer_backend import ViewerCameraConfig, load_viewer_camera_config
 from policy_web_viewer.command_schema import (
-    CommandSchema,
-    check_command_schema_compatibility,
     load_command_schema,
 )
 
@@ -58,8 +56,7 @@ class OnlineDemoSimulator:
         self.config = config
         self.policy_manager = PolicyManager.load(config.ckpt_dir, config.multi_ckpt)
         self.profile = self.policy_manager.active
-        self.command_schemas = self._load_command_schemas()
-        self.command_schema = self.command_schemas[self.active_profile_name]
+        self.command_schema = load_command_schema(self.profile.policy_yaml_path, self.profile.policy)
         self.model = mujoco.MjModel.from_xml_path(str(config.robot.xml_path))
         self.model.opt.timestep = 1.0 / float(config.sim_hz)
         self.data = mujoco.MjData(self.model)
@@ -109,14 +106,6 @@ class OnlineDemoSimulator:
     @property
     def active_profile_name(self) -> str:
         return self.policy_manager.active_name
-
-    def _load_command_schemas(self) -> dict[str, CommandSchema]:
-        schemas = {
-            name: load_command_schema(profile.policy_yaml_path, profile.policy)
-            for name, profile in self.policy_manager.profiles.items()
-        }
-        check_command_schema_compatibility(schemas)
-        return schemas
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -192,19 +181,6 @@ class OnlineDemoSimulator:
             self.drag_force.fill(0.0)
             self.drag_torque.fill(0.0)
 
-    def switch_next_policy(self) -> str:
-        if not self.policy_manager.switch.enabled:
-            return self.active_profile_name
-        with self.lock:
-            self.profile = self.policy_manager.switch_next()
-            self.command_schema = self.command_schemas[self.active_profile_name]
-            self.command_min = self.command_schema.min_vector()
-            self.command_max = self.command_schema.max_vector()
-            self.profile.policy.reset()
-            self.last_policy_t = -math.inf
-            np.clip(self.command, self.command_min, self.command_max, out=self.command)
-            return self.active_profile_name
-
     def status(self) -> dict:
         with self.lock:
             return {
@@ -212,8 +188,6 @@ class OnlineDemoSimulator:
                 "robot": self.config.robot.name,
                 "terrain": self.config.robot.terrain,
                 "policy": self.active_profile_name,
-                "policies": list(self.policy_manager.profiles),
-                "switch_enabled": self.policy_manager.switch.enabled,
                 "time": round(float(self.data.time), 3),
                 "height": round(float(self.data.qpos[2]), 3) if self.data.qpos.size >= 3 else 0.0,
                 "command": [round(float(v), 3) for v in self.command],

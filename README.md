@@ -4,11 +4,13 @@ Browser-based MuJoCo policy viewer for trained Unitree checkpoints.
 
 The intended workflow is:
 
-1. Develop and tune the demo locally with `policy-web-viewer`.
+1. Develop and tune the interactive demo locally with `policy-web-viewer`.
 2. Export the same UI as a static MuJoCo WASM site with `policy-web-viewer-export`.
 3. Deploy the exported folder with GitHub Pages.
 
-## Quick Start
+中文说明: [README_zh.md](README_zh.md)
+
+## Requirements
 
 Install `unitree-deploy` and this project in the same Python environment:
 
@@ -17,6 +19,8 @@ pip install -e /home/syw/.gitrepos/unitree-deploy
 pip install -e /home/syw/.gitrepos/web_policy
 npm install
 ```
+
+## Local Demo
 
 Run the local API-backed demo:
 
@@ -86,7 +90,7 @@ src/policy_web_viewer/
 
 There is one frontend source tree: `frontend/`.
 
-Do edit:
+Edit:
 
 ```text
 frontend/index.html
@@ -122,11 +126,16 @@ Both runtimes share the same HTML and CSS. The runtime adapters differ only wher
 
 Keep user-facing UI changes in shared files when possible. Runtime-specific behavior belongs in `frontend/src/runtimes/`.
 
-Rendering and UI tuning notes are documented in [README_RENDERING_ZH.md](README_RENDERING_ZH.md).
-
 ## Command Schema
 
 Place `web_policy.yaml` next to `policy.yaml` when a checkpoint needs custom browser command controls and hotkeys. If it is absent, `policy-web-viewer` tries to infer the default 3D velocity command schema from the policy config.
+
+## More Documentation
+
+- Architecture and `unitree-deploy` relationship: [docs/architecture_en.md](docs/architecture_en.md)
+- Rendering and UI tuning: [docs/rendering_en.md](docs/rendering_en.md)
+- 中文架构说明: [docs/architecture_zh.md](docs/architecture_zh.md)
+- 中文渲染参数说明: [docs/rendering_zh.md](docs/rendering_zh.md)
 
 ## Useful Commands
 

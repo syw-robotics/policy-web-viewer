@@ -40,7 +40,7 @@ Home 视角当前是：
 
 ```js
 target: [0, 0.85, 0]
-position: [3.0, 2.0, 3.2]
+position: [-4.0, 1.5, 2.0]
 ```
 
 含义：
@@ -71,13 +71,13 @@ Orbit 控制器的重要参数：
 
 ```js
 SCENE_CONFIG = {
-  background: 0x15202a,
+  background: 0x2d3b3d,
   fogNear: 9,
   fogFar: 18,
 }
 ```
 
-- `0x15202a`：背景和雾颜色。
+- `0x2d3b3d`：背景和雾颜色。
 - `9`：雾开始距离。
 - `18`：雾完全显著的距离。
 

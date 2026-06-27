@@ -1,3 +1,4 @@
+/* Theme tokens shared by the viewer canvas overlays and the right control panel. */
 :root {
   color-scheme: dark;
   --bg: #0c0f12;
@@ -10,6 +11,7 @@
   --danger: #e76f51;
 }
 
+/* Keep sizing predictable for fixed toolbars, sliders, and canvas containers. */
 * {
   box-sizing: border-box;
 }
@@ -35,12 +37,14 @@ select {
   font: inherit;
 }
 
+/* Desktop layout: full-height viewer with a fixed-width control panel. */
 .shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   height: 100vh;
 }
 
+/* The canvas runtime owns everything inside #viewport. */
 .viewer {
   position: relative;
   min-width: 0;
@@ -48,6 +52,7 @@ select {
   background: #111820;
 }
 
+/* The renderer canvas must fill the available viewport without layout gaps. */
 #viewport,
 #viewport canvas {
   display: block;
@@ -55,6 +60,7 @@ select {
   height: 100%;
 }
 
+/* Loading state also acts as a fatal-error surface for runtime startup errors. */
 #loading {
   position: absolute;
   inset: 0;
@@ -69,6 +75,7 @@ select {
   display: none;
 }
 
+/* Non-interactive viewer hints; pointer events stay with the canvas. */
 .viewer-help {
   position: absolute;
   left: 18px;
@@ -87,6 +94,7 @@ select {
   pointer-events: none;
 }
 
+/* Optional camera debug overlay enabled by RUNTIME_CONFIG.showViewParams. */
 .view-params {
   position: absolute;
   left: 16px;
@@ -107,6 +115,7 @@ select {
   white-space: pre-wrap;
 }
 
+/* Right-side controls and status readouts. */
 .panel {
   display: flex;
   min-width: 0;
@@ -132,9 +141,10 @@ header p {
   font-size: 14px;
 }
 
+/* Primary simulation controls. Secondary/single variants match their button count. */
 .toolbar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
@@ -148,6 +158,7 @@ header p {
   margin-top: -6px;
 }
 
+/* Buttons are fixed-height to avoid panel layout shifts when labels change. */
 button {
   min-width: 0;
   height: 38px;
@@ -176,6 +187,7 @@ button:disabled {
   opacity: 0.45;
 }
 
+/* Compact status table. Long policy names ellipsize instead of widening the panel. */
 .readout {
   display: grid;
   grid-template-columns: 1fr;
@@ -213,6 +225,7 @@ footer {
   white-space: nowrap;
 }
 
+/* Command schema controls generated at runtime from web_policy.yaml or policy config. */
 .sticks {
   display: grid;
   gap: 16px;
@@ -269,6 +282,7 @@ footer {
   border-top: 1px solid var(--line);
 }
 
+/* Connection status is updated by each runtime adapter. */
 #connection[data-state="ok"] {
   color: var(--accent);
 }
@@ -277,6 +291,7 @@ footer {
   color: var(--danger);
 }
 
+/* Mobile layout stacks the viewer above the controls and avoids horizontal scroll. */
 @media (max-width: 840px) {
   body {
     width: 100vw;

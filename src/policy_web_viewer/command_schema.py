@@ -123,18 +123,6 @@ def _resolve_schema_path(policy_dir: Path) -> Path:
     return preferred
 
 
-def check_command_schema_compatibility(schemas: Mapping[str, CommandSchema]) -> None:
-    first_name, first_schema = next(iter(schemas.items()))
-    first_dim_names = [dim.name for dim in first_schema.dims]
-    for name, schema in schemas.items():
-        dim_names = [dim.name for dim in schema.dims]
-        if dim_names != first_dim_names:
-            raise ValueError(
-                "all switchable policy-web-viewer command schemas must use compatible dim names; "
-                f"{name!r} has {dim_names}, {first_name!r} has {first_dim_names}"
-            )
-
-
 def _load_configured_schema(schema_path: Path) -> CommandSchema:
     config = load_yaml(schema_path)
     command_config = config.get("command")

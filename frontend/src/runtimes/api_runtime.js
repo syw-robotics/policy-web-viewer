@@ -68,7 +68,6 @@ const el = {
   loading: document.querySelector("#loading"),
   run: document.querySelector("#run"),
   reset: document.querySelector("#reset"),
-  switchPolicy: document.querySelector("#switch-policy"),
   follow: document.querySelector("#follow"),
   contacts: document.querySelector("#contacts"),
   viewHome: document.querySelector("#view-home"),
@@ -563,7 +562,6 @@ function renderStatus(payload, options = {}) {
   if (payload.robot) {
     el.subtitle.textContent = `${payload.robot} / ${payload.terrain}`;
   }
-  el.switchPolicy.disabled = !payload.switch_enabled;
 }
 
 const signed = (value) => `${value >= 0 ? "+" : ""}${Number(value).toFixed(2)}`;
@@ -791,10 +789,6 @@ function mjQuat(value) {
 el.run.addEventListener("click", toggleSimulation);
 
 el.reset.addEventListener("click", resetSimulation);
-
-el.switchPolicy.addEventListener("click", async () => {
-  renderStatus(await post("/api/control", { action: "switch_policy" }));
-});
 
 el.follow.addEventListener("click", () => {
   state.follow = !state.follow;

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Policy Web Viewer</title>
+    <script type="module" crossorigin src="./assets/index-Db2cvP1h.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DWQr7p--.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="viewer" aria-label="MuJoCo policy demo viewer">
+        <div id="viewport"></div>
+        <div id="loading">Loading runtime</div>
+        <div class="viewer-help">
+          <span id="command-help"><b>Command:</b> use the panel controls or configured hotkeys</span>
+          <span><b>View:</b> left drag empty space · wheel zoom</span>
+          <span><b>Force:</b> left drag robot · Torque: right drag robot</span>
+        </div>
+      </section>
+      <aside class="panel">
+        <header>
+          <h1>Policy Viewer</h1>
+          <p id="subtitle">MuJoCo ONNX policy</p>
+        </header>
+        <div class="toolbar" aria-label="simulation controls">
+          <button id="run" type="button">Start</button>
+          <button id="reset" type="button">Reset</button>
+        </div>
+        <div class="toolbar secondary" aria-label="viewer controls">
+          <button id="follow" type="button" aria-pressed="true">Follow</button>
+          <button id="contacts" type="button" disabled>Contacts</button>
+          <button id="view-home" type="button" title="Reset camera view">Home</button>
+        </div>
+        <div class="toolbar single" aria-label="external force controls">
+          <button id="drag" type="button" aria-pressed="true">Force</button>
+        </div>
+        <section class="readout" aria-label="status">
+          <div><span>Policy</span><strong id="policy">-</strong></div>
+          <div><span>Time</span><strong id="time">0.000 s</strong></div>
+          <div><span>Height</span><strong id="height">0.000 m</strong></div>
+          <div><span>Performance</span><strong id="performance">0.00 RTF</strong></div>
+        </section>
+        <section id="command-controls" class="sticks" aria-label="policy command"></section>
+        <footer><span id="connection">Loading</span></footer>
+      </aside>
+    </main>
+  </body>
+</html>

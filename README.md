@@ -1,3 +1,7 @@
+
+
+
+
 # policy-web-viewer
 
 Browser-based MuJoCo policy viewer for trained Unitree checkpoints.
@@ -9,6 +13,12 @@ The intended workflow is:
 3. Deploy the exported folder with GitHub Pages.
 
 中文说明: [README_zh.md](README_zh.md)
+
+## Demo
+
+https://github.com/user-attachments/assets/d0173371-9e1d-4efd-a881-b204999295b5
+
+[Explore the interactive online demo](https://syw-robotics.github.io/policy-web-viewer/)
 
 ## Requirements
 

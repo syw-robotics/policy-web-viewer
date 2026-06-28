@@ -10,6 +10,12 @@
 
 English version: [README.md](README.md)
 
+## Demo 演示
+
+https://github.com/user-attachments/assets/d0173371-9e1d-4efd-a881-b204999295b5
+
+[点击此处探索交互式demo](https://syw-robotics.github.io/policy-web-viewer/)
+
 ## 环境安装
 
 `unitree-deploy` 和本项目需要安装在同一个 Python 环境里：

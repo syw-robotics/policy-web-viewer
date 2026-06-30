@@ -3,3 +3,5 @@ __pycache__/
 *.blend1
 export/
 renders/
+.agents/
+.codex/

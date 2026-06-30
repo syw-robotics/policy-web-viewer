@@ -16,6 +16,7 @@ import numpy as np
 
 
 DEFAULT_GEOM_GROUPS = {0, 1, 2}
+DEFAULT_BACKGROUND = "#161a1d"
 DEFAULT_TEMPLATE_DELETE_COLLECTIONS = "army,robots,robot,pushing_robot,axes,axes.001"
 DEFAULT_TEMPLATE_DELETE_OBJECTS = "push_robot,pushing_robot"
 DEFAULT_TEMPLATE_LIGHT_OFFSETS = {
@@ -129,7 +130,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grid-major-every", type=int, default=4)
     parser.add_argument("--grid-line-width", type=float, default=0.012)
     parser.add_argument("--no-grid", action="store_true")
-    parser.add_argument("--background", default="#161a1d")
+    parser.add_argument("--background", help=f"World background color. Defaults to {DEFAULT_BACKGROUND} without a template, and keeps the template world when omitted.")
     parser.add_argument("--floor-color", default="#2d3330")
     parser.add_argument("--shadow-softness", type=float, default=4.0)
     return parser.parse_args(argv_after_double_dash())
@@ -466,6 +467,9 @@ def configure_scene(args: argparse.Namespace, data, metadata: dict, *, using_tem
     scene.render.film_transparent = False
 
     if using_template and args.engine == "auto":
+        if args.background is not None:
+            scene.world = bpy.data.worlds.new("world") if scene.world is None else scene.world
+            configure_world(scene.world, args.background)
         configure_color_management(scene)
         if scene.render.engine == "CYCLES":
             configure_cycles(scene, args)
@@ -473,7 +477,8 @@ def configure_scene(args: argparse.Namespace, data, metadata: dict, *, using_tem
             configure_eevee(scene, args)
     else:
         scene.world = bpy.data.worlds.new("world") if scene.world is None else scene.world
-        configure_world(scene.world, args.background)
+        if args.background is not None or not using_template:
+            configure_world(scene.world, args.background or DEFAULT_BACKGROUND)
         configure_color_management(scene)
         if args.engine == "cycles":
             scene.render.engine = "CYCLES"
